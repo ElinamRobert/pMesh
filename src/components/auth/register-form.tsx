@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
+import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,23 +21,24 @@ export function RegisterForm() {
     setError(null);
     setLoading(true);
 
-    const supabase = createClient();
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { full_name: fullName },
-        emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
-      },
+    const res = await fetch("/api/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password, fullName }),
     });
 
-    if (error) {
-      setError(error.message);
+    const data = await res.json();
+
+    if (!res.ok) {
+      setError(data.error ?? "Registration failed");
       setLoading(false);
       return;
     }
 
-    router.push("/onboarding");
+    // Auto sign-in after registration
+    await signIn("credentials", { email, password, redirect: false });
+    router.push("/");
+    router.refresh();
   }
 
   return (
@@ -62,6 +63,7 @@ export function RegisterForm() {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
+          autoComplete="email"
         />
       </div>
       <div className="space-y-2">
@@ -69,11 +71,12 @@ export function RegisterForm() {
         <Input
           id="password"
           type="password"
-          placeholder="At least 8 characters"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
           minLength={8}
+          autoComplete="new-password"
+          placeholder="At least 8 characters"
         />
       </div>
 
@@ -85,10 +88,7 @@ export function RegisterForm() {
 
       <p className="text-center text-sm text-muted-foreground">
         Already have an account?{" "}
-        <Link
-          href="/login"
-          className="underline underline-offset-4 hover:text-foreground"
-        >
+        <Link href="/login" className="text-primary hover:underline">
           Sign in
         </Link>
       </p>

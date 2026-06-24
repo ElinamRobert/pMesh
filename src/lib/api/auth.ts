@@ -1,8 +1,9 @@
-import { createClient } from "@/lib/supabase/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export interface AuthContext {
-  supabaseUserId: string;
+  userId: string;
   user: {
     id: string;
     email: string;
@@ -11,45 +12,21 @@ export interface AuthContext {
   organizationId: string;
 }
 
-export async function getAuthContext(
-  organizationId?: string
-): Promise<AuthContext | null> {
-  const supabase = await createClient();
-  const {
-    data: { user: supabaseUser },
-  } = await supabase.auth.getUser();
-
-  if (!supabaseUser) return null;
+export async function getAuthContext(): Promise<AuthContext | null> {
+  const session = await getServerSession(authOptions);
+  if (!session?.userId) return null;
 
   const user = await prisma.user.findUnique({
-    where: { supabaseId: supabaseUser.id },
+    where: { id: session.userId },
     select: { id: true, email: true, fullName: true },
   });
-
   if (!user) return null;
 
-  // If organizationId provided, verify membership
-  if (organizationId) {
-    const membership = await prisma.organizationMember.findUnique({
-      where: {
-        organizationId_userId: { organizationId, userId: user.id },
-      },
-    });
-    if (!membership) return null;
-    return { supabaseUserId: supabaseUser.id, user, organizationId };
-  }
-
-  // Otherwise return first org the user belongs to
   const membership = await prisma.organizationMember.findFirst({
     where: { userId: user.id },
     select: { organizationId: true },
   });
-
   if (!membership) return null;
 
-  return {
-    supabaseUserId: supabaseUser.id,
-    user,
-    organizationId: membership.organizationId,
-  };
+  return { userId: user.id, user, organizationId: membership.organizationId };
 }

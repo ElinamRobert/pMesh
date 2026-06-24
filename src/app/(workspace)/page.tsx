@@ -1,4 +1,5 @@
-import { createClient } from "@/lib/supabase/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { FolderKanban, Plus, Brain, ArrowRight } from "lucide-react";
@@ -6,14 +7,11 @@ import { Button } from "@/components/ui/button";
 import { formatRelative } from "@/lib/utils";
 
 export default async function DashboardPage() {
-  const supabase = await createClient();
-  const {
-    data: { user: supabaseUser },
-  } = await supabase.auth.getUser();
+  const session = await getServerSession(authOptions);
 
-  const user = supabaseUser
+  const user = session?.userId
     ? await prisma.user.findUnique({
-        where: { supabaseId: supabaseUser.id },
+        where: { id: session.userId },
         include: {
           memberships: {
             include: {
@@ -47,7 +45,6 @@ export default async function DashboardPage() {
         </p>
       </div>
 
-      {/* Recent projects */}
       <section className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">

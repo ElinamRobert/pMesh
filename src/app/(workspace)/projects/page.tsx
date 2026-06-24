@@ -1,4 +1,5 @@
-import { createClient } from "@/lib/supabase/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -19,12 +20,11 @@ const statusVariant: Record<string, "success" | "warning" | "secondary" | "outli
 };
 
 export default async function ProjectsPage() {
-  const supabase = await createClient();
-  const { data: { user: supabaseUser } } = await supabase.auth.getUser();
-  if (!supabaseUser) redirect("/login");
+  const session = await getServerSession(authOptions);
+  if (!session?.userId) redirect("/login");
 
   const user = await prisma.user.findUnique({
-    where: { supabaseId: supabaseUser.id },
+    where: { id: session.userId },
     include: {
       memberships: {
         include: {

@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { Sidebar } from "@/components/layout/sidebar";
 import { AIAssistantPanel } from "@/components/layout/ai-assistant-panel";
 
@@ -8,12 +9,8 @@ export default async function WorkspaceLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/login");
+  const session = await getServerSession(authOptions);
+  if (!session) redirect("/login");
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">

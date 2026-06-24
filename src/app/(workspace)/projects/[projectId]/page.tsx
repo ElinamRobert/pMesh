@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { createClient } from "@/lib/supabase/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { formatDate, formatRelative } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -33,18 +34,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function ProjectPage({ params }: Props) {
   const { projectId } = await params;
-  const supabase = await createClient();
-  const { data: { user: supabaseUser } } = await supabase.auth.getUser();
-
-  const user = supabaseUser
-    ? await prisma.user.findUnique({ where: { supabaseId: supabaseUser.id } })
-    : null;
+  const session = await getServerSession(authOptions);
+  const userId = session?.userId ?? null;
 
   const project = await prisma.project.findFirst({
     where: {
       id: projectId,
       organization: {
-        members: { some: { userId: user?.id } },
+        members: { some: { userId: userId ?? "" } },
       },
     },
     include: {

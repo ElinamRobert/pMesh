@@ -6,7 +6,6 @@ generator client {
 datasource db {
   provider   = "postgresql"
   url        = env("DATABASE_URL")
-  directUrl  = env("DIRECT_URL")
   extensions = [pgvector(map: "vector"), pg_trgm]
 }
 
@@ -142,14 +141,14 @@ enum AuditAction {
 // ─── IDENTITY & TENANCY ──────────────────────────────────────────────────────
 
 model User {
-  id         String   @id @default(cuid())
-  supabaseId String   @unique @map("supabase_id")
-  email      String   @unique
-  fullName   String   @map("full_name")
-  avatarUrl  String?  @map("avatar_url")
-  timezone   String   @default("UTC")
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  id           String   @id @default(cuid())
+  email        String   @unique
+  fullName     String   @map("full_name")
+  passwordHash String   @map("password_hash")
+  avatarUrl    String?  @map("avatar_url")
+  timezone     String   @default("UTC")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
   memberships     OrganizationMember[]
   aiConversations AIConversation[]
