@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getAuthContext } from "@/lib/api/auth";
 import { ok, Errors } from "@/lib/api/response";
 import { EpicStatus } from "@prisma/client";
+import { upsertKnowledgeNode } from "@/lib/ai/memory";
 
 const createSchema = z.object({
   projectId: z.string().min(1),
@@ -109,7 +110,14 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // TODO(Sprint 3): fire-and-forget embedding job for AI memory
+  upsertKnowledgeNode({
+    organizationId: auth.organizationId,
+    projectId,
+    entityType: "epic",
+    entityId: epic.id,
+    title: epic.title,
+    description: epic.description,
+  }).catch(() => {});
 
   return ok(epic, 201);
 }
