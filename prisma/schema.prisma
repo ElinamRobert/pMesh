@@ -370,9 +370,11 @@ model RoadmapItem {
 
   roadmap Roadmap  @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
   feature Feature? @relation(fields: [featureId], references: [id], onDelete: SetNull)
+  epic    Epic?    @relation(fields: [epicId], references: [id], onDelete: SetNull)
 
   @@index([roadmapId])
   @@index([featureId])
+  @@index([epicId])
   @@map("roadmap_items")
 }
 
