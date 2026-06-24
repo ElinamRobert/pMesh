@@ -1,0 +1,504 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  directUrl  = env("DIRECT_URL")
+  extensions = [pgvector(map: "vector"), pg_trgm]
+}
+
+// ─── ENUMS ───────────────────────────────────────────────────────────────────
+
+enum MemberRole {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+enum ProjectStatus {
+  DRAFT
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  ARCHIVED
+}
+
+enum ProjectType {
+  WEB_APP
+  MOBILE_APP
+  API
+  DATA_PLATFORM
+  INTERNAL_TOOL
+  OTHER
+}
+
+enum FeatureStatus {
+  PROPOSED
+  UNDER_REVIEW
+  APPROVED
+  IN_PROGRESS
+  COMPLETED
+  REJECTED
+  DEFERRED
+}
+
+enum FeaturePriority {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+  ICEBOX
+}
+
+enum FeatureSource {
+  CUSTOMER_REQUEST
+  INTERNAL
+  MARKET_RESEARCH
+  REGULATORY
+  TECHNICAL_DEBT
+  COMPETITOR_ANALYSIS
+  USER_FEEDBACK
+  SUPPORT_TICKET
+}
+
+enum EpicStatus {
+  BACKLOG
+  PLANNED
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+enum StoryStatus {
+  DRAFT
+  READY
+  IN_PROGRESS
+  IN_REVIEW
+  DONE
+  BLOCKED
+  CANCELLED
+}
+
+enum StoryType {
+  USER_STORY
+  BUG
+  TASK
+  SPIKE
+  CHORE
+}
+
+enum CriteriaType {
+  FUNCTIONAL
+  NON_FUNCTIONAL
+  EDGE_CASE
+  SECURITY
+  PERFORMANCE
+}
+
+enum RoadmapStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum RoadmapItemType {
+  FEATURE
+  EPIC
+  MILESTONE
+}
+
+enum MemoryType {
+  PRODUCT_CONTEXT
+  TEAM_NORM
+  VOCABULARY
+  DECISION
+  CONSTRAINT
+  STAKEHOLDER
+  MEETING_NOTE
+  ENTITY_SUMMARY
+  CONVERSATION_SUMMARY
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  STATUS_CHANGE
+  MEMBER_ADDED
+  MEMBER_REMOVED
+  AI_GENERATED
+}
+
+// ─── IDENTITY & TENANCY ──────────────────────────────────────────────────────
+
+model User {
+  id         String   @id @default(cuid())
+  supabaseId String   @unique @map("supabase_id")
+  email      String   @unique
+  fullName   String   @map("full_name")
+  avatarUrl  String?  @map("avatar_url")
+  timezone   String   @default("UTC")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  memberships     OrganizationMember[]
+  aiConversations AIConversation[]
+  auditLogs       AuditLog[]
+
+  @@map("users")
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  name      String
+  logoUrl   String?  @map("logo_url")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  members    OrganizationMember[]
+  projects   Project[]
+  aiMemories AIMemory[]
+
+  @@map("organizations")
+}
+
+model OrganizationMember {
+  id             String     @id @default(cuid())
+  organizationId String     @map("organization_id")
+  userId         String     @map("user_id")
+  role           MemberRole @default(MEMBER)
+  joinedAt       DateTime   @default(now()) @map("joined_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([organizationId])
+  @@index([userId])
+  @@map("organization_members")
+}
+
+// ─── PROJECT ─────────────────────────────────────────────────────────────────
+
+model Project {
+  id             String        @id @default(cuid())
+  organizationId String        @map("organization_id")
+  name           String
+  slug           String
+  description    String?
+  status         ProjectStatus @default(DRAFT)
+  type           ProjectType   @default(WEB_APP)
+  startDate      DateTime?     @map("start_date")
+  targetDate     DateTime?     @map("target_date")
+  metadata       Json          @default("{}")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  features        Feature[]
+  epics           Epic[]
+  roadmaps        Roadmap[]
+  aiConversations AIConversation[]
+  auditLogs       AuditLog[]
+
+  @@unique([organizationId, slug])
+  @@index([organizationId])
+  @@index([status])
+  @@map("projects")
+}
+
+// ─── FEATURE ─────────────────────────────────────────────────────────────────
+
+model Feature {
+  id            String          @id @default(cuid())
+  projectId     String          @map("project_id")
+  title         String
+  description   String?
+  status        FeatureStatus   @default(PROPOSED)
+  priority      FeaturePriority @default(MEDIUM)
+  source        FeatureSource   @default(INTERNAL)
+  businessValue Int?            @map("business_value")
+  effort        Int?
+  requestedBy   String?         @map("requested_by")
+  requestedAt   DateTime?       @map("requested_at")
+  tags          String[]        @default([])
+  aiSummary     String?         @map("ai_summary")
+  metadata      Json            @default("{}")
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+
+  project        Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  epics          Epic[]
+  roadmapItems   RoadmapItem[]
+  auditLogs      AuditLog[]      @relation("FeatureAuditLogs")
+  graphEdgesFrom KnowledgeEdge[] @relation("EdgeFrom")
+  graphEdgesTo   KnowledgeEdge[] @relation("EdgeToFeature")
+
+  @@index([projectId])
+  @@index([status])
+  @@index([priority])
+  @@map("features")
+}
+
+// ─── EPIC ────────────────────────────────────────────────────────────────────
+
+model Epic {
+  id          String     @id @default(cuid())
+  projectId   String     @map("project_id")
+  featureId   String?    @map("feature_id")
+  title       String
+  description String?
+  status      EpicStatus @default(BACKLOG)
+  startDate   DateTime?  @map("start_date")
+  endDate     DateTime?  @map("end_date")
+  progress    Int        @default(0)
+  tags        String[]   @default([])
+  aiSummary   String?    @map("ai_summary")
+  metadata    Json       @default("{}")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  feature      Feature?      @relation(fields: [featureId], references: [id], onDelete: SetNull)
+  userStories  UserStory[]
+  roadmapItems RoadmapItem[]
+  auditLogs    AuditLog[]    @relation("EpicAuditLogs")
+
+  @@index([projectId])
+  @@index([featureId])
+  @@index([status])
+  @@map("epics")
+}
+
+// ─── USER STORY ───────────────────────────────────────────────────────────────
+
+model UserStory {
+  id          String      @id @default(cuid())
+  epicId      String      @map("epic_id")
+  title       String
+  persona     String?
+  action      String?
+  benefit     String?
+  status      StoryStatus @default(DRAFT)
+  type        StoryType   @default(USER_STORY)
+  storyPoints Int?        @map("story_points")
+  priority    Int         @default(0)
+  sprint      String?
+  assigneeId  String?     @map("assignee_id")
+  externalId  String?     @map("external_id")
+  tags        String[]    @default([])
+  notes       String?
+  metadata    Json        @default("{}")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  epic               Epic               @relation(fields: [epicId], references: [id], onDelete: Cascade)
+  acceptanceCriteria AcceptanceCriteria[]
+  auditLogs          AuditLog[]         @relation("StoryAuditLogs")
+
+  @@index([epicId])
+  @@index([status])
+  @@index([sprint])
+  @@map("user_stories")
+}
+
+model AcceptanceCriteria {
+  id          String       @id @default(cuid())
+  userStoryId String       @map("user_story_id")
+  description String
+  type        CriteriaType @default(FUNCTIONAL)
+  given       String?
+  when        String?
+  then        String?
+  isCompleted Boolean      @default(false) @map("is_completed")
+  sortOrder   Int          @default(0) @map("sort_order")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  userStory UserStory @relation(fields: [userStoryId], references: [id], onDelete: Cascade)
+
+  @@index([userStoryId])
+  @@map("acceptance_criteria")
+}
+
+// ─── ROADMAP ──────────────────────────────────────────────────────────────────
+
+model Roadmap {
+  id          String        @id @default(cuid())
+  projectId   String        @map("project_id")
+  title       String
+  description String?
+  status      RoadmapStatus @default(DRAFT)
+  startDate   DateTime      @map("start_date")
+  endDate     DateTime      @map("end_date")
+  phases      Json          @default("[]")
+  metadata    Json          @default("{}")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  project   Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  items     RoadmapItem[]
+  auditLogs AuditLog[]    @relation("RoadmapAuditLogs")
+
+  @@index([projectId])
+  @@map("roadmaps")
+}
+
+model RoadmapItem {
+  id        String          @id @default(cuid())
+  roadmapId String          @map("roadmap_id")
+  featureId String?         @map("feature_id")
+  epicId    String?         @map("epic_id")
+  type      RoadmapItemType
+  phase     String
+  startDate DateTime?       @map("start_date")
+  endDate   DateTime?       @map("end_date")
+  laneIndex Int             @default(0) @map("lane_index")
+  notes     String?
+  createdAt DateTime        @default(now()) @map("created_at")
+  updatedAt DateTime        @updatedAt @map("updated_at")
+
+  roadmap Roadmap  @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
+  feature Feature? @relation(fields: [featureId], references: [id], onDelete: SetNull)
+
+  @@index([roadmapId])
+  @@index([featureId])
+  @@map("roadmap_items")
+}
+
+// ─── AI MEMORY ────────────────────────────────────────────────────────────────
+
+model AIMemory {
+  id             String     @id @default(cuid())
+  organizationId String     @map("organization_id")
+  projectId      String?    @map("project_id")
+  type           MemoryType
+  content        String
+  // 1536-dim vector (text-embedding-3-small)
+  // Created via raw SQL migration; Prisma treats as Unsupported
+  embedding      Unsupported("vector(1536)")?
+  metadata       Json       @default("{}")
+  entityType     String?    @map("entity_type")
+  entityId       String?    @map("entity_id")
+  importance     Float      @default(0.5)
+  lastAccessedAt DateTime?  @map("last_accessed_at")
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([projectId])
+  @@index([type])
+  @@index([entityType, entityId])
+  @@map("ai_memories")
+}
+
+// ─── KNOWLEDGE GRAPH ──────────────────────────────────────────────────────────
+
+model KnowledgeEdge {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  projectId      String?  @map("project_id")
+  // discussed_in | depends_on | derived_from | replaces |
+  // conflicts_with | requested_by | blocked_by | related_to | contains
+  relation       String
+  fromType       String   @map("from_type")
+  fromId         String   @map("from_id")
+  toType         String   @map("to_type")
+  toId           String   @map("to_id")
+  rationale      String?
+  weight         Float    @default(1.0)
+  source         String   @default("user")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  fromFeature Feature? @relation("EdgeFrom", fields: [fromId], references: [id], onDelete: Cascade, map: "fk_edge_from_feature")
+  toFeature   Feature? @relation("EdgeToFeature", fields: [toId], references: [id], onDelete: Cascade, map: "fk_edge_to_feature")
+
+  @@index([organizationId, projectId])
+  @@index([fromType, fromId])
+  @@index([toType, toId])
+  @@index([relation])
+  @@map("knowledge_edges")
+}
+
+// ─── AI CONVERSATIONS ─────────────────────────────────────────────────────────
+
+model AIConversation {
+  id              String   @id @default(cuid())
+  userId          String   @map("user_id")
+  projectId       String?  @map("project_id")
+  title           String?
+  contextSnapshot Json     @default("{}") @map("context_snapshot")
+  totalTokens     Int      @default(0) @map("total_tokens")
+  isSummarized    Boolean  @default(false) @map("is_summarized")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  user     User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project  Project?    @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  messages AIMessage[]
+
+  @@index([userId])
+  @@index([projectId])
+  @@map("ai_conversations")
+}
+
+model AIMessage {
+  id             String      @id @default(cuid())
+  conversationId String      @map("conversation_id")
+  role           MessageRole
+  content        String
+  toolCalls      Json?       @map("tool_calls")
+  memoryChunkIds String[]    @map("memory_chunk_ids")
+  model          String?
+  inputTokens    Int?        @map("input_tokens")
+  outputTokens   Int?        @map("output_tokens")
+  createdAt      DateTime    @default(now()) @map("created_at")
+
+  conversation AIConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@map("ai_messages")
+}
+
+// ─── AUDIT LOG ────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id             String      @id @default(cuid())
+  organizationId String      @map("organization_id")
+  projectId      String?     @map("project_id")
+  userId         String?     @map("user_id")
+  action         AuditAction
+  entityType     String      @map("entity_type")
+  entityId       String      @map("entity_id")
+  diff           Json        @default("{}")
+  ipAddress      String?     @map("ip_address")
+  userAgent      String?     @map("user_agent")
+  createdAt      DateTime    @default(now()) @map("created_at")
+
+  project   Project?   @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  user      User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  feature   Feature?   @relation("FeatureAuditLogs", fields: [entityId], references: [id], onDelete: SetNull, map: "fk_audit_feature")
+  epic      Epic?      @relation("EpicAuditLogs", fields: [entityId], references: [id], onDelete: SetNull, map: "fk_audit_epic")
+  userStory UserStory? @relation("StoryAuditLogs", fields: [entityId], references: [id], onDelete: SetNull, map: "fk_audit_story")
+  roadmap   Roadmap?   @relation("RoadmapAuditLogs", fields: [entityId], references: [id], onDelete: SetNull, map: "fk_audit_roadmap")
+
+  @@index([organizationId])
+  @@index([projectId])
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
