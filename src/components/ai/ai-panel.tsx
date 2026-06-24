@@ -23,7 +23,7 @@ export function AIPanel({ projectId }: Props) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const { messages, isStreaming, error, sendMessage, stopStreaming, clearMessages } =
+  const { messages, isStreaming, error, providerInfo, sendMessage, stopStreaming, clearMessages } =
     useAIChat({ projectId });
 
   useEffect(() => {
@@ -137,6 +137,11 @@ export function AIPanel({ projectId }: Props) {
         </form>
         <p className="mt-1.5 text-center text-[10px] text-muted-foreground">
           Enter to send · Shift+Enter for new line
+          {providerInfo && (
+            <span className="ml-1 opacity-60">
+              · {providerInfo.provider}/{providerInfo.model}
+            </span>
+          )}
         </p>
       </div>
     </div>

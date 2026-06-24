@@ -15,6 +15,11 @@ interface UseAIChatOptions {
   onConversationId?: (id: string) => void;
 }
 
+export interface ProviderInfo {
+  provider: string;
+  model: string;
+}
+
 export function useAIChat({
   projectId,
   conversationId: initialConversationId,
@@ -26,6 +31,7 @@ export function useAIChat({
   );
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [providerInfo, setProviderInfo] = useState<ProviderInfo | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const sendMessage = useCallback(
@@ -86,6 +92,8 @@ export function useAIChat({
               if (event.type === "conversation_id") {
                 setConversationId(event.conversationId);
                 onConversationId?.(event.conversationId);
+              } else if (event.type === "provider") {
+                setProviderInfo({ provider: event.provider, model: event.model });
               } else if (event.type === "delta") {
                 setMessages((prev) =>
                   prev.map((m) =>
@@ -145,6 +153,7 @@ export function useAIChat({
     conversationId,
     isStreaming,
     error,
+    providerInfo,
     sendMessage,
     stopStreaming,
     clearMessages,
